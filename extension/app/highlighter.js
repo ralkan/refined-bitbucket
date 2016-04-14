@@ -1,24 +1,40 @@
 /* jshint esversion: 6 */
 
-define(['../var/document', '../var/languages'], function(document, languages) {
+define(['../var/document', '../var/languages'], (document, languages) => {
     'use strict';
 
     const INTERVAL = 50; // Interval in milliseconds.
 
-    /**
-     * Adds language-xxxx definition class to div ancestor element thus Prism
-     * assumes that the definition is inherited.
-     * @return {void}
-     */
-    function addLanguageClass() {
-        const containers = Array.from(document.getElementsByClassName('diff-container'));
-        containers.forEach(container => {
-            const parent = container.parentElement;
-            const filePath = parent.getAttribute('data-path');
+    return {
+        init: () => {
+            waitForRender().then(() => {
+                insertStyles();
+                addLanguageClass();
+                // prepareListeners
+                addCodeTagToElements('.source');
+                Prism.highlightAll();
+            });
+        }
+    };
 
-            // Faster way to get the file extension.
-            const fileExtension = `.${filePath.slice((filePath.lastIndexOf(".") - 1 >>> 0) + 2)}`;
-            container.className += ` ${languages[fileExtension] || ''}`;
+    /**
+     * Waits until the a element with id 'pullrequest-diff' is displayed and then
+     * returns a promise.
+     * @return {Promise} Returns a promise that is fulfilled when it finds an element
+     * with a id 'pullrequest-diff'.
+     */
+    function waitForRender() {
+        return new Promise(resolve => {
+            const intervalId = setInterval(() => {
+                const container = document.getElementById('pullrequest-diff');
+                if (!container) {
+                    return;
+                }
+
+                // If main container is rendered, stop the interval and continue.
+                clearInterval(intervalId);
+                resolve();
+            }, INTERVAL);
         });
     }
 
@@ -40,12 +56,29 @@ define(['../var/document', '../var/languages'], function(document, languages) {
     }
 
     /**
-     * Surrounds each line of code with a <code> element.
-     * That's the way Prism expects your code to be: <pre><code>{code_here}</code></pre>
+     * Adds language-xxxx definition class to div ancestor element thus Prism
+     * assumes that the definition is inherited.
      * @return {void}
      */
-    function addCodeTag() {
-        const lines = Array.from(document.getElementsByClassName('source'));
+    function addLanguageClass() {
+        const containers = Array.from(document.getElementsByClassName('diff-container'));
+        containers.forEach(container => {
+            const parent = container.parentElement;
+            const filePath = parent.getAttribute('data-path');
+
+            // Faster way to get the file extension.
+            const fileExtension = `.${filePath.slice((filePath.lastIndexOf(".") - 1 >>> 0) + 2)}`;
+            container.className += ` ${languages[fileExtension] || ''}`;
+        });
+    }
+
+    /**
+     * Surrounds each selector (always an element with 'source' class) with a <code> element.
+     * That's the way Prism expects your code to be: <pre><code>{code_here}</code></pre>
+     * @param {string} elementsSelector The selector, eg. '.source'
+     */
+    function addCodeTagToElements(elementsSelector) {
+        const lines = Array.from(document.querySelectorAll(elementsSelector));
         let size = lines.length;
         while (size--) {
             const codeEl = document.createElement('code');
@@ -55,30 +88,4 @@ define(['../var/document', '../var/languages'], function(document, languages) {
             line.appendChild(codeEl);
         }
     }
-
-    /**
-     * Wait for page render the elements (content is rendered via Ajax)
-     * and highlight the source code.
-     * @return {void}
-     */
-    function highlightWhenReady() {
-        const intervalId = setInterval(() => {
-            const container = document.getElementById('pullrequest-diff');
-            if (!container) return;
-
-            // If main container is rendered, stop the interval and continue.
-            clearInterval(intervalId);
-
-            addLanguageClass();
-            addCodeTag();
-            insertStyles();
-            Prism.highlightAll();
-        }, INTERVAL);
-    }
-
-    return {
-        run: function() {
-            highlightWhenReady();
-        }
-    };
 });
