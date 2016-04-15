@@ -7,12 +7,12 @@ define(['../var/document', '../var/languages'], (document, languages) => {
 
     return {
         init: () => {
-            waitForRender().then(() => {
+            waitForRender('#pullrequest-diff').then(() => {
                 insertStyles();
-                addLanguageClass();
-                // prepareListeners
+                prepareLanguageClasses();
                 addCodeTagToElements('.source');
                 Prism.highlightAll();
+                prepareListeners();
             });
         }
     };
@@ -23,15 +23,15 @@ define(['../var/document', '../var/languages'], (document, languages) => {
      * @return {Promise} Returns a promise that is fulfilled when it finds an element
      * with a id 'pullrequest-diff'.
      */
-    function waitForRender() {
+    function waitForRender(selector) {
         return new Promise(resolve => {
             const intervalId = setInterval(() => {
-                const container = document.getElementById('pullrequest-diff');
-                if (!container) {
+                const element = document.querySelector(selector);
+                if (!element) {
                     return;
                 }
 
-                // If main container is rendered, stop the interval and continue.
+                // If element is rendered, stop the interval and continue.
                 clearInterval(intervalId);
                 resolve();
             }, INTERVAL);
@@ -42,11 +42,10 @@ define(['../var/document', '../var/languages'], (document, languages) => {
      * Adds the necessary styles to the <head>.
      * It shouldn't be needed, since we have the prism.css, but for some reason
      * the styles are not being injected into the page.
-     * @return {void}
      */
     function insertStyles() {
         const head = document.getElementsByTagName('head')[0];
-        let style = document.createElement('style');
+        const style = document.createElement('style');
         style.type = 'text/css';
         // Prism css
         style.innerHTML = '.token.comment,.token.prolog,.token.doctype,.token.cdata{color: slategray}.token.punctuation{color: #999}.namespace{opacity: .7}.token.property,.token.tag,.token.boolean,.token.number,.token.constant,.token.symbol,.token.deleted{color: #905}.token.selector,.token.attr-name,.token.string,.token.char,.token.builtin,.token.inserted{color: #690}.token.operator,.token.entity,.token.url,.language-css .token.string,.style .token.string{color: #a67f59;background: hsla(0, 0%, 100%, .5)}.token.atrule,.token.attr-value,.token.keyword{color: #07a}.token.function{color: #DD4A68}.token.regex,.token.important,.token.variable{color: #e90}.token.important,.token.bold{font-weight: bold}.token.italic{font-style: italic}.token.entity{cursor: help}';
@@ -58,9 +57,8 @@ define(['../var/document', '../var/languages'], (document, languages) => {
     /**
      * Adds language-xxxx definition class to div ancestor element thus Prism
      * assumes that the definition is inherited.
-     * @return {void}
      */
-    function addLanguageClass() {
+    function prepareLanguageClasses() {
         const containers = Array.from(document.getElementsByClassName('diff-container'));
         containers.forEach(container => {
             const parent = container.parentElement;
@@ -73,12 +71,46 @@ define(['../var/document', '../var/languages'], (document, languages) => {
     }
 
     /**
+     * Sets the listeners to the elements that show to the user code that is initially
+     * hidden (eg. the ellipsis button that expands the collapsed code). This dynamic
+     * code doesn't get highlighted, so Prism must be called to each new line of code.
+     */
+    function prepareListeners() {
+        const showMoreCodeElements = Array.from(document.querySelectorAll('.ellipsis'));
+        showMoreCodeElements.forEach(element => {
+            element.addEventListener('click', event => {
+                // find source lines that are not highlighted yet
+                const selector = '.source:not([class*="language"])';
+                waitForRender(selector).then(event => {
+                    const codeTags = addCodeTagToElements(selector);
+                    highlightElements(codeTags);
+                }.bind(null, event));
+                // should the event listener be unattached?
+            });
+        });
+    }
+
+    /**
+     * Call Prism.highlightElement() for each <code> element that is not highlighted.
+     * @param  {Array} codeElements An array that contains <code> elements.
+     */
+    function highlightElements(codeElements) {
+        setTimeout(() => {
+            codeElements.forEach(element => {
+                Prism.highlightElement(element);
+            });
+        }, 100);
+    }
+
+    /**
      * Surrounds each selector (always an element with 'source' class) with a <code> element.
      * That's the way Prism expects your code to be: <pre><code>{code_here}</code></pre>
      * @param {string} elementsSelector The selector, eg. '.source'
+     * @return {Array} Returns a array with the created <code> elements.
      */
     function addCodeTagToElements(elementsSelector) {
         const lines = Array.from(document.querySelectorAll(elementsSelector));
+        const codeTags = [];
         let size = lines.length;
         while (size--) {
             const codeEl = document.createElement('code');
@@ -86,6 +118,8 @@ define(['../var/document', '../var/languages'], (document, languages) => {
             codeEl.innerText = line.textContent;
             line.textContent = '';
             line.appendChild(codeEl);
+            codeTags.push(codeEl);
         }
+        return codeTags;
     }
 });
